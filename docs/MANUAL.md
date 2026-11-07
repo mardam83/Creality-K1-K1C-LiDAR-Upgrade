@@ -39,9 +39,23 @@ module of the **Creality K1**, from Klipper, with Fluidd or Mainsail.
   Print, PrusaSlicer, SuperSlicer, Bambu Studio.
 
 ## Installation
-On the printer, SSH as root:
+You need root access on the printer (screen → Settings → Root account: it shows the
+password) and its IP address.
+
+**From a PC (easiest)** — download the repository (*Code → Download ZIP*, then unzip),
+then from that folder:
+
+- **Windows 10/11**: double-click `install-from-pc.bat`, type the printer IP and, the
+  first time, the options `--with-hook --lang it` (or just `--with-hook`). Or from a
+  terminal: `install-from-pc.bat 192.168.1.xx --with-hook`
+- **Linux / macOS**: `sh install-from-pc.sh 192.168.1.xx --with-hook`
+
+The root password is asked once. The script copies the toolkit over SSH (only `ssh` and
+`tar` are needed, both built into Windows) to `/usr/data/k1-lidar` and runs the installer.
+
+**On the printer** (SSH as root), if it has `git`:
 ```sh
-git clone https://github.com/<user>/k1-lidar /usr/data/k1-lidar
+git clone https://github.com/mardam83/Creality-K1-K1C-LiDAR-Upgrade /usr/data/k1-lidar
 sh /usr/data/k1-lidar/install.sh --with-hook          # add --lang it for Italian messages
 ```
 The installer checks the prerequisites, backs up `printer.cfg`, links the macros and the
@@ -55,7 +69,13 @@ It is safe to run again.
 | `--lang en\|it` | language of the messages |
 | `--check` | only checks the prerequisites, changes nothing |
 
-- **Updates**: Fluidd/Mainsail → *Update manager* → **k1-lidar**.
+- **Updates**: download the new version and run `install-from-pc` again **without
+  options** (hook, language, settings and calibrations are kept). Or on the printer:
+  `sh /usr/data/k1-lidar/update.sh` (downloads the latest version; `git pull` for a git
+  checkout, which also shows up in Fluidd/Mainsail → *Update manager*). The previous
+  version is kept: `sh /usr/data/k1-lidar/update.sh --rollback` goes back to it, and if
+  the installer fails the previous version is restored automatically. Updating is
+  refused while a print or a LiDAR job is running.
 - **After a Creality firmware update** run `install.sh` again (the update rewrites
   `printer.cfg` and may delete `moonraker.conf`).
 - **Uninstall**: `sh /usr/data/k1-lidar/uninstall.sh` (`--purge` also deletes the saved

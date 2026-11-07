@@ -22,13 +22,19 @@ Mainsail:
 - OrcaSlicer, Creality Print, PrusaSlicer, SuperSlicer or Bambu Studio.
 
 ## Install
-On the printer, SSH as root:
+From a PC, in the downloaded folder (needs the printer IP and its root password):
 ```sh
-git clone https://github.com/<user>/k1-lidar /usr/data/k1-lidar
-sh /usr/data/k1-lidar/install.sh --with-hook          # add --lang it for Italian messages
+install-from-pc.bat 192.168.1.xx --with-hook          # Windows (or double-click it)
+sh install-from-pc.sh 192.168.1.xx --with-hook        # Linux / macOS
+```
+Add `--lang it` for Italian messages. Or on the printer, SSH as root:
+```sh
+git clone https://github.com/mardam83/Creality-K1-K1C-LiDAR-Upgrade /usr/data/k1-lidar
+sh /usr/data/k1-lidar/install.sh --with-hook
 ```
 `--with-hook` enables the "before a print" features; without it you only get the
-buttons. Updates via Fluidd/Mainsail → *Update manager* → **k1-lidar**. Run
+buttons. Update: run `install-from-pc` again with no options, or
+`sh /usr/data/k1-lidar/update.sh` on the printer (`--rollback` to go back). Run
 `install.sh` again after a Creality firmware update. Uninstall:
 `sh /usr/data/k1-lidar/uninstall.sh`.
 

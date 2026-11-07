@@ -1,7 +1,8 @@
 #!/bin/sh
 # update.sh - install or update the K1 LiDAR toolkit ON THE PRINTER (run as root).
 #
-#   sh /usr/data/k1-lidar/update.sh                 download the latest version and install it
+#   sh /usr/data/k1-lidar/update.sh                 download the latest version from GitHub
+#                                                   and install it
 #   sh /usr/data/k1-lidar/update.sh --rollback      go back to the version before the last update
 #   sh update.sh --apply DIR [install.sh options]   install the toolkit unpacked in DIR
 #                                                   (used by install-from-pc.sh / .bat)
@@ -15,14 +16,16 @@
 # fails, the previous version is put back automatically.
 # Refuses to run while a print or a LiDAR job is running (it restarts Klipper).
 #
-# Download source: K1LIDAR_URL (tar.gz of the repo), default below. If the folder is a
-# git checkout, "git pull" is used instead.
+# Download: "git pull" if the folder is a git checkout, otherwise "git clone" of
+# K1LIDAR_REPO (the K1 has git; its wget can't do https to GitHub). Without git:
+# K1LIDAR_URL (tar.gz of the repo) with curl/wget.
 set -e
 
 DEST="${K1LIDAR_DEST:-/usr/data/k1-lidar}"
 OLD="$DEST.old"
 STAGE="$DEST.new"
-URL="${K1LIDAR_URL:-https://github.com/<user>/k1-lidar/archive/refs/heads/main.tar.gz}"
+REPO="${K1LIDAR_REPO:-https://github.com/mardam83/Creality-K1-K1C-LiDAR-Upgrade.git}"
+URL="${K1LIDAR_URL:-https://github.com/mardam83/Creality-K1-K1C-LiDAR-Upgrade/archive/refs/heads/main.tar.gz}"
 
 ok()  { echo "  [ok]   $1"; }
 die() { echo "  [ERR]  $1"; exit 1; }
@@ -92,7 +95,14 @@ run_install() {
 }
 
 download() {
-    rm -rf "$STAGE" /tmp/k1lidar_dl; mkdir -p /tmp/k1lidar_dl
+    rm -rf "$STAGE"
+    if command -v git >/dev/null 2>&1; then
+        echo "== git clone $REPO =="
+        git clone -q "$REPO" "$STAGE" || die "git clone failed (internet?)"
+        ok "downloaded ($(cd "$STAGE" && git log -1 --format='%h %cd' --date=short))"
+        return
+    fi
+    rm -rf /tmp/k1lidar_dl; mkdir -p /tmp/k1lidar_dl
     echo "== download $URL =="
     if command -v curl >/dev/null 2>&1; then
         curl -fL --retry 2 -o /tmp/k1lidar_dl/src.tgz "$URL" || die "download failed (curl)"
@@ -142,7 +152,6 @@ case "$1" in
             ( cd "$DEST" && git pull --ff-only ) || die "git pull failed"
             run_install "$@"
         else
-            case "$URL" in *"<user>"*) die "set K1LIDAR_URL (download address of the toolkit)" ;; esac
             download
             swap_in "$STAGE"
             run_install "$@"

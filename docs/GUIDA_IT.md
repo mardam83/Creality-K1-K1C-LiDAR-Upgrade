@@ -39,9 +39,24 @@ Taratura del **Pressure Advance** e **controllo del primo strato** con il modulo
   PrusaSlicer, SuperSlicer, Bambu Studio.
 
 ## Installazione
-Sulla stampante, via SSH come root:
+Serve l'accesso root della stampante (schermo → Impostazioni → Account root: mostra la
+password) e il suo indirizzo IP.
+
+**Dal PC (il modo più semplice)** — scarica il repository (*Code → Download ZIP* e
+scompattalo), poi da quella cartella:
+
+- **Windows 10/11**: doppio clic su `install-from-pc.bat`, scrivi l'IP della stampante
+  e, la prima volta, le opzioni `--with-hook --lang it`. Oppure da terminale:
+  `install-from-pc.bat 192.168.1.xx --with-hook --lang it`
+- **Linux / macOS**: `sh install-from-pc.sh 192.168.1.xx --with-hook --lang it`
+
+La password di root viene chiesta una volta sola. Lo script copia il toolkit via SSH
+(servono solo `ssh` e `tar`, già presenti in Windows) in `/usr/data/k1-lidar` e lancia
+l'installer.
+
+**Sulla stampante** (SSH come root), se ha `git`:
 ```sh
-git clone https://github.com/<utente>/k1-lidar /usr/data/k1-lidar
+git clone https://github.com/mardam83/Creality-K1-K1C-LiDAR-Upgrade /usr/data/k1-lidar
 sh /usr/data/k1-lidar/install.sh --with-hook --lang it
 ```
 L'installer controlla i requisiti, fa il backup di `printer.cfg`, collega macro e
@@ -55,7 +70,13 @@ Moonraker. Si può rieseguire senza problemi.
 | `--lang it\|en` | lingua dei messaggi |
 | `--check` | controlla solo i requisiti, non tocca nulla |
 
-- **Aggiornamenti**: Fluidd/Mainsail → *Update manager* → **k1-lidar**.
+- **Aggiornamenti**: scarica la nuova versione e rilancia `install-from-pc` **senza
+  opzioni** (hook, lingua, impostazioni e tarature restano). Oppure sulla stampante:
+  `sh /usr/data/k1-lidar/update.sh` (scarica l'ultima versione; con un clone git fa
+  `git pull`, e allora compare anche in Fluidd/Mainsail → *Update manager*). La versione
+  precedente viene conservata: `sh /usr/data/k1-lidar/update.sh --rollback` ci torna, e
+  se l'installer fallisce viene ripristinata da sola. L'aggiornamento viene rifiutato
+  durante una stampa o un job LiDAR.
 - **Dopo un aggiornamento firmware Creality** rilancia `install.sh` (l'aggiornamento
   riscrive `printer.cfg` e può cancellare `moonraker.conf`).
 - **Disinstallazione**: `sh /usr/data/k1-lidar/uninstall.sh` (`--purge` cancella anche
