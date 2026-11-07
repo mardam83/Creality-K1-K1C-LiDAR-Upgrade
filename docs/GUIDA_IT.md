@@ -3,7 +3,7 @@
 Taratura del **Pressure Advance** e **controllo del primo strato** con il modulo LiDAR
 (laser) della **Creality K1**, da Klipper, con Fluidd o Mainsail.
 
-> English: [MANUAL.md](MANUAL.md)
+> English: [MANUAL.md](MANUAL.md) · Spiegazione semplice di come funziona e cosa è migliorato: [SPIEGAZIONE_SEMPLICE.md](SPIEGAZIONE_SEMPLICE.md)
 
 ## Indice
 1. [Cosa fa](#cosa-fa)
@@ -81,8 +81,9 @@ Il PA viene salvato **per profilo filamento dello slicer e per temperatura dell'
   temperatura: nello slicer duplica il profilo e dagli un nome chiaro, per esempio
   "PLA eSun arancione" e "PLA Sunlu nero". È il nome che li distingue: se li stampi
   entrambi con lo stesso profilo, condividono lo stesso PA.
-- **Disattiva "Enable pressure advance"** nel profilo filamento dello slicer, altrimenti
-  lo slicer scrive un suo PA nel gcode e sovrascrive quello misurato.
+- Con `LIDAR_FLOW` attivo il PA LiDAR **sostituisce** quello che lo slicer scrive nel
+  gcode (*Enable pressure advance*). Con `LIDAR_FLOW` spento vince il PA dello slicer:
+  disattiva quell'opzione nel profilo filamento se vuoi il PA salvato.
 
 Dove si salva: `/usr/data/lidar_calib.json` sulla stampante (fuori dalla cartella del
 toolkit, così gli aggiornamenti non lo toccano). Si gestisce con i pulsanti:
@@ -94,7 +95,14 @@ toolkit, così gli aggiornamenti non lo toccano). Si gestisce con i pulsanti:
 | `LIDAR_PA_FORGET FILAMENT="nome profilo" [NOZZLE=220]` | lo cancella (senza `NOZZLE`: tutte le temperature) |
 
 ## Quale PA usa una stampa
-In quest'ordine — vince il primo che vale:
+**Con `LIDAR_FLOW` attivo (1 o 2) vince sempre il PA LiDAR**: quello salvato per il
+profilo e la temperatura, oppure quello misurato prima della stampa. Se il gcode imposta
+un suo PA (slicer con *Enable pressure advance*, `M900 K`, modalità silenziosa del
+display), durante quella stampa viene sostituito dal valore LiDAR; in console compare
+una riga che lo segnala. Fuori dalla stampa `SET_PRESSURE_ADVANCE` funziona come sempre.
+Serve l'hook (`--with-hook`).
+
+Con `LIDAR_FLOW` spento, in quest'ordine — vince il primo che vale:
 
 1. **Il PA del gcode**, se nel profilo dello slicer è attivo *Enable pressure advance*.
    In console compare un avviso.
@@ -104,8 +112,8 @@ In quest'ordine — vince il primo che vale:
    prima della stampa, poi salvato e applicato.
 4. Altrimenti **il valore di `printer.cfg`** (`pressure_advance` in `[extruder]`).
 
-Nota: la *modalità silenziosa* del display, se la attivi durante la stampa, imposta PA
-0.05 finché non la spegni.
+Nota: con `LIDAR_FLOW` spento, la *modalità silenziosa* del display, se la attivi
+durante la stampa, imposta PA 0.05 finché non la spegni.
 
 ## Trovare il PA di un filamento (senza stampare)
 Carica il filamento, libera il bordo sinistro del piatto (X 0–30 mm), poi in Fluidd →
@@ -246,7 +254,7 @@ pattern, dato che le prime righe si stampano un po' peggio:
 ## Problemi comuni
 | Sintomo | Cosa fare |
 |---|---|
-| una stampa non usa il PA misurato | `LIDAR_PA_LIST`: il nome del profilo è uguale a quello dello slicer, e la temperatura è la stessa? *Enable pressure advance* è spento nello slicer? `LIDAR_STATUS` dice che l'hook è installato? |
+| una stampa non usa il PA misurato | `LIDAR_PA_LIST`: il nome del profilo è uguale a quello dello slicer, e la temperatura è la stessa? `LIDAR_FLOW` è attivo (altrimenti vince *Enable pressure advance* dello slicer)? `LIDAR_STATUS` dice che l'hook è installato? |
 | `LiDAR: c'e' gia' un'operazione in corso` | aspetta, oppure `LIDAR_CANCEL` |
 | pulsanti assenti in Fluidd | rilancia `install.sh`; controlla `[include k1lidar.cfg]` in `printer.cfg` |
 | Fluidd smette di funzionare dopo un aggiornamento firmware | l'aggiornamento ha cancellato `moonraker.conf`: rilancia `install.sh` |

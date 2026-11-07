@@ -12,6 +12,8 @@
 #      (o se --flow 2) si tara stampando il pattern sul bordo sinistro;
 #   3. primo strato (se attivo): tabella -> layer 1 -> scan -> C2 -> riprendi/pausa;
 #   4. altrimenti si avvia la stampa normalmente (senza rifare il livellamento).
+# Con la taratura attiva (--flow 1/2) il PA LiDAR sostituisce anche quello scritto nel
+# gcode dallo slicer (lock_pa -> macro SET_PRESSURE_ADVANCE di k1lidar_hook.cfg).
 import argparse, os, time
 from types import SimpleNamespace
 
@@ -32,6 +34,24 @@ def _hook_installed():
         return "gcode_macro sdcard_print_file" in st
     except Exception:
         return False
+
+
+def _lock_installed():
+    try:
+        st = kl_query({"configfile": ["settings"]}).get("configfile", {}).get("settings", {})
+        return "gcode_macro _lidar_pa_lock" in st
+    except Exception:
+        return False
+
+
+def lock_pa(pa, armed=False):
+    """Con LIDAR_FLOW attivo il PA LiDAR vince su quello del gcode: la macro
+    SET_PRESSURE_ADVANCE (k1lidar_hook.cfg) sostituisce ADVANCE durante la stampa.
+    armed=True: la stampa partira' dal primo strato (FIRST_FLOOR_PRINT via hook)."""
+    if pa is None or not _lock_installed():
+        return False
+    kl("_LIDAR_PA_LOCK PA=%.4f ARMED=%d" % (pa, 1 if armed else 0))
+    return True
 
 
 def start_print(gpath, prepared=False):
@@ -66,14 +86,22 @@ def do_print(a):
     saved = store.get_pa(key, legacy)
     log("== job stampa: %s | filamento %s (%s) | ugello %d / piatto %d | PA salvato %s"
         % (os.path.basename(gpath), name, key, hot, bed, saved))
-    if meta.get("slicer_pa_enabled") and (a.flow or a.pa_apply):
+    slicer_pa = meta.get("slicer_pa_enabled")
+    if slicer_pa and not a.flow and a.pa_apply:
         echo(T("slicer_pa", pa=meta.get("slicer_pa")))
 
     need_pa = a.flow == 2 or (a.flow == 1 and saved is None)
     if saved is not None and not need_pa and (a.flow or a.pa_apply):
         kl("SET_PRESSURE_ADVANCE ADVANCE=%.4f" % saved)
         echo(T("pa_reuse", pa="%.3f" % saved, fil=name))
+
+    def lock(pa, armed):
+        # taratura PA attiva: il PA LiDAR sostituisce anche quello scritto nel gcode
+        if a.flow and lock_pa(pa, armed) and slicer_pa:
+            echo(T("slicer_pa_lock", pa=meta.get("slicer_pa"), our="%.4f" % pa))
+
     if not need_pa and not a.firstlayer:
+        lock(saved, False)
         start_print(gpath)
         return {"pa": saved, "firstlayer": None}
 
@@ -102,10 +130,12 @@ def do_print(a):
                 "--gcode", gpath, "--material", material, "--hotend", str(hot),
                 "--bed", str(bed), "--filament", name, "--resume", "--on-bad", a.on_bad,
                 "--no-selfcal", "--backend", a.backend])
+            lock(result["pa"], True)
             printing = True          # da qui la stampa la gestisce firstlayer.run
             result["firstlayer"] = FL.run(fa, L=L, prepared=True)
         else:
             L.shutdown(); L = None
+            lock(result["pa"], False)
             printing = True
             start_print(gpath, prepared=True)
         return result

@@ -32,6 +32,8 @@ MSG = {
                "LiDAR: filamento '{fil}' non ancora tarato: eseguo la taratura PA"),
     "slicer_pa": ("WARNING: the slicer sets its own PA ({pa}) in this gcode and will override ours",
                   "ATTENZIONE: lo slicer imposta un suo PA ({pa}) in questo gcode e sovrascrivera' il nostro"),
+    "slicer_pa_lock": ("LiDAR: the slicer's PA ({pa}) in this gcode will be replaced by the LiDAR PA {our}",
+                       "LiDAR: il PA dello slicer ({pa}) in questo gcode verra' sostituito dal PA LiDAR {our}"),
     "fl_start": ("LiDAR first layer check: {file}", "Controllo primo strato LiDAR: {file}"),
     "fl_result": ("LiDAR first layer: {verdict}", "Primo strato LiDAR: {verdict}"),
     "fl_height": ("LiDAR: first layer {pct}% vs. the usual height for this filament "

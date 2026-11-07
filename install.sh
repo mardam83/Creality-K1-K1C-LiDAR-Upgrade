@@ -1,8 +1,9 @@
 #!/bin/sh
 # install.sh - install the K1 LiDAR toolkit (PA calibration + first layer check).
 #
-# Run ON THE PRINTER as root, from the folder you cloned:
-#   git clone https://github.com/<user>/k1-lidar /usr/data/k1-lidar
+# Run ON THE PRINTER as root. Easiest way, from a PC: install-from-pc.bat (Windows) or
+# install-from-pc.sh (Linux/macOS), which copy the toolkit over SSH and run this script
+# through update.sh. Or on the printer, from the folder you cloned:
 #   sh /usr/data/k1-lidar/install.sh [--with-hook] [--lang it]
 #
 # Options:
@@ -93,6 +94,11 @@ if [ "$FREE" -lt 5120 ] && [ -d /root/.cache/pip ] && [ "$CHECK_ONLY" = "0" ]; t
     rm -rf /root/.cache/pip; ok "root filesystem was full: removed pip cache"
 else
     ok "root filesystem: ${FREE}KB free"
+fi
+
+# install.sh riavvia Klipper e Moonraker: mai durante una stampa o un job LiDAR
+if [ "$CHECK_ONLY" = "0" ] && [ -f "$DIR/update.sh" ] && BUSY=$(sh "$DIR/update.sh" --busy-check); then
+    err "$BUSY: install when it is finished"
 fi
 
 if [ "$FAIL" = "1" ]; then

@@ -27,11 +27,14 @@ class FakeL(object):
         calls.append("laser_off")
 
 
-def setup(hook=True):
+def setup(hook=True, slicer_pa=False):
     del calls[:]
     job.kl = lambda g, t=None: calls.append(g)
     job.kl_query = lambda o, t=None: {"configfile": {"settings": (
-        {"gcode_macro sdcard_print_file": {}} if hook else {})}}
+        {"gcode_macro sdcard_print_file": {}, "gcode_macro _lidar_pa_lock": {}} if hook else {})}}
+    real_read = job.GM.__dict__.get("_real_read") or job.GM.read
+    job.GM._real_read = real_read
+    job.GM.read = lambda p: dict(real_read(p), slicer_pa_enabled=slicer_pa, slicer_pa=0.04)
     job.echo = lambda m: calls.append("echo:" + m)
     job.log = lambda m="": None
     job.factory_level = lambda h, b: calls.append("LEVEL %d/%d" % (h, b))
@@ -108,6 +111,36 @@ def main():
     check("senza hook -> SDCARD_PRINT_FILE (non _BASE), nessun PA",
           any(c.startswith('SDCARD_PRINT_FILE FILENAME=') for c in calls)
           and not any("PRESSURE_ADVANCE" in c for c in calls))
+
+    setup()
+    job.do_print(args(flow=1))
+    check("flow=1 con PA salvato -> PA bloccato sulla stampa (sostituisce quello del gcode)",
+          "_LIDAR_PA_LOCK PA=0.0310 ARMED=0" in calls
+          and calls.index("_LIDAR_PA_LOCK PA=0.0310 ARMED=0") < next(
+              i for i, c in enumerate(calls) if c.startswith("SDCARD_PRINT_FILE_BASE")))
+
+    setup(slicer_pa=True)
+    job.do_print(args(flow=2))
+    check("flow=2 + PA dello slicer nel gcode -> blocca il PA appena tarato e avvisa",
+          "_LIDAR_PA_LOCK PA=0.0310 ARMED=0" in calls
+          and any(c.startswith("echo:") and "0.0310" in c for c in calls))
+
+    setup()
+    job.do_print(args(flow=1, firstlayer=1))
+    check("flow + primo strato -> lock armato per la stampa FIRST_FLOOR_PRINT",
+          "_LIDAR_PA_LOCK PA=0.0310 ARMED=1" in calls
+          and calls.index("_LIDAR_PA_LOCK PA=0.0310 ARMED=1") < calls.index("FL_RUN prepared=True on_bad=pause"))
+
+    setup(slicer_pa=True)
+    job.do_print(args(flow=0, firstlayer=0, pa_apply=1))
+    check("taratura spenta (solo pa_apply) -> nessun lock, vince il PA del gcode (avviso)",
+          not any(c.startswith("_LIDAR_PA_LOCK") for c in calls)
+          and any(c.startswith("echo:") for c in calls))
+
+    setup(hook=False)
+    job.do_print(args(flow=1))
+    check("macro di lock assente -> nessun _LIDAR_PA_LOCK",
+          not any(c.startswith("_LIDAR_PA_LOCK") for c in calls))
 
     setup()
     job.PA.run = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("scan vuoto"))

@@ -82,8 +82,9 @@ The PA is saved **per filament profile of the slicer and per nozzle temperature*
   same temperature: in the slicer duplicate the profile and give it a clear name, e.g.
   "PLA eSun orange" and "PLA Sunlu black". The name is what tells them apart: if you
   print both with the same profile, they share one PA.
-- **Turn off "Enable pressure advance"** in the slicer's filament profile, otherwise
-  the slicer writes its own PA into the gcode and overrides the measured one.
+- With `LIDAR_FLOW` on, the LiDAR PA **replaces** the one the slicer writes into the
+  gcode (*Enable pressure advance*). With `LIDAR_FLOW` off the slicer's PA wins: turn
+  that option off in the filament profile if you want the saved PA.
 
 Where it is stored: `/usr/data/lidar_calib.json` on the printer (outside the toolkit
 folder, so updates do not touch it). Manage it with the buttons:
@@ -95,7 +96,13 @@ folder, so updates do not touch it). Manage it with the buttons:
 | `LIDAR_PA_FORGET FILAMENT="profile name" [NOZZLE=220]` | deletes it (without `NOZZLE`: every temperature) |
 
 ## Which PA a print uses
-In this order — the first one that applies wins:
+**With `LIDAR_FLOW` on (1 or 2) the LiDAR PA always wins**: the one saved for the
+profile and temperature, or the one measured before the print. If the gcode sets its
+own PA (slicer *Enable pressure advance*, `M900 K`, the display's quiet mode), during
+that print it is replaced by the LiDAR value; a console line tells you so. Outside a
+print `SET_PRESSURE_ADVANCE` works as usual. Needs the hook (`--with-hook`).
+
+With `LIDAR_FLOW` off, in this order — the first one that applies wins:
 
 1. **The gcode's own PA**, if the slicer profile has *Enable pressure advance* on. You
    get a warning in the console.
@@ -106,8 +113,8 @@ In this order — the first one that applies wins:
    the print, then saved and applied.
 4. Otherwise **the value in `printer.cfg`** (`pressure_advance` in `[extruder]`).
 
-Note: the display's *quiet mode*, if you turn it on during a print, sets PA 0.05 until
-you turn it off.
+Note: with `LIDAR_FLOW` off, the display's *quiet mode*, if you turn it on during a
+print, sets PA 0.05 until you turn it off.
 
 ## Finding the PA of a filament (no print)
 Load the filament, clear the left edge of the plate (X 0–30 mm), then in Fluidd →
@@ -245,7 +252,7 @@ of the pattern, because the first rows print slightly worse:
 ## Troubleshooting
 | Symptom | What to do |
 |---|---|
-| a print does not use the measured PA | `LIDAR_PA_LIST`: is the profile name the same as in the slicer, and the temperature the same? Is *Enable pressure advance* off in the slicer? Is `LIDAR_STATUS` showing the hook installed? |
+| a print does not use the measured PA | `LIDAR_PA_LIST`: is the profile name the same as in the slicer, and the temperature the same? Is `LIDAR_FLOW` on (otherwise the slicer's *Enable pressure advance* wins)? Is `LIDAR_STATUS` showing the hook installed? |
 | `LiDAR: another operation is running` | wait, or `LIDAR_CANCEL` |
 | buttons missing in Fluidd | run `install.sh` again; check `[include k1lidar.cfg]` in `printer.cfg` |
 | Fluidd stops working after a firmware update | the update deleted `moonraker.conf`: run `install.sh` again |

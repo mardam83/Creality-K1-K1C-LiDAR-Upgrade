@@ -42,14 +42,16 @@ the printer knows which filament is loaded.
 
 - **Two different filaments need two different profiles** in the slicer (duplicate and
   rename, e.g. "PLA eSun orange", "PLA Sunlu black"), even at the same temperature.
-- Turn **off "Enable pressure advance"** in the slicer's filament profile, or the
-  slicer's PA overrides the measured one.
+- With `LIDAR_FLOW` on, the LiDAR PA **replaces** the PA the slicer writes in the gcode
+  (*Enable pressure advance*). With `LIDAR_FLOW` off, the slicer's PA wins: turn that
+  option off in the filament profile if you want the saved PA.
 - `LIDAR_PA_LIST` lists them, `LIDAR_PA_SET` sets one by hand, `LIDAR_PA_FORGET`
   deletes one. Stored in `/usr/data/lidar_calib.json`.
 
-**Which PA a print uses**: 1) the gcode's, if the slicer has *Enable pressure advance*
-on; 2) otherwise the one measured for that profile and temperature; 3) if there is none
-and `LIDAR_FLOW` is on, it is measured before the print; 4) otherwise `printer.cfg`.
+**Which PA a print uses**: with `LIDAR_FLOW` on, always the LiDAR one (saved for that
+profile and temperature, or measured before the print if there is none), even if the
+gcode sets its own. With `LIDAR_FLOW` off: 1) the gcode's, if the slicer has *Enable
+pressure advance* on; 2) otherwise the saved one; 3) otherwise `printer.cfg`.
 
 ## Quick start (Fluidd / Mainsail → Macros)
 **Find the PA of a filament now** (prints only the test pattern at X 0–30 mm, ~15 min):
