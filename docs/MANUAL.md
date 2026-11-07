@@ -174,8 +174,19 @@ Needs the hook (`install.sh --with-hook`). In Fluidd → Macros press **once**:
 | `LIDAR_FLOW MODE=0` | off (the saved PA is still applied, see `LIDAR_PA_APPLY`) |
 | `LIDAR_FIRSTLAYER ON=1 ON_BAD=pause` | also checks the first layer (`ON_BAD=cancel` cancels a bad print) |
 | `LIDAR_PA_APPLY ON=0` | do not apply saved PAs (use `printer.cfg` / the gcode) |
+| `LIDAR_ASK_ON` | **ask every time**: see below |
 
-The choice is kept (also after a restart); `LIDAR_STATUS` shows what is on. Then start
+The choice is kept (also after a restart); `LIDAR_STATUS` shows what is on.
+
+**Deciding print by print.** With `LIDAR_ASK_ON` (or `LIDAR_ASK ON=1 TIMEOUT=60`) every
+print start opens a dialog in Fluidd/Mainsail with the file name and the buttons
+**PA calibration + first layer**, **PA calibration only**, **First layer check only**,
+**Print without LiDAR** and **Do not print**. With no answer within the time limit
+(default 60 s, 10 to 600) the print starts with the saved settings above, e.g. when you
+start from the display and Fluidd is not open. Closing the dialog with the X counts as
+no answer. "PA calibration" uses the `LIDAR_FLOW` mode (1 if it is off). `LIDAR_CANCEL`
+while the dialog is open = do not print. `LIDAR_ASK_OFF` removes the question. Needs
+Fluidd 1.30+ or Mainsail 2.9+. Then start
 your prints as usual — from Fluidd, Mainsail or the display. What happens:
 
 1. Profile name, material and temperatures are read from the gcode (otherwise from
@@ -201,6 +212,7 @@ Keep the left edge of the plate clear whenever a calibration may run.
 | `LIDAR_FLOW MODE=0/1/2` (`LIDAR_FLOW_ON` / `_OFF`) | calibration before a print |
 | `LIDAR_FIRSTLAYER ON=0/1 ON_BAD=pause/cancel` (`_ON` / `_OFF`) | first layer check |
 | `LIDAR_PA_APPLY ON=0/1` | apply the saved PA at print start |
+| `LIDAR_ASK ON=0/1 TIMEOUT=60` (`LIDAR_ASK_ON` / `_OFF`) | ask before every print (dialog in Fluidd/Mainsail) |
 | `LIDAR_SET_MATERIAL MATERIAL= HOTEND= BED=` | fallback when the gcode does not say |
 | `LIDAR_CANCEL` | stop the running job; laser and heaters off |
 | `LIDAR_LANGUAGE LANG=en/it` | language of the messages |

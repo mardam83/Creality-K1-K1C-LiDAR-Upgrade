@@ -175,8 +175,19 @@ Serve l'hook (`install.sh --with-hook`). In Fluidd → Macro premi **una volta**
 | `LIDAR_FLOW MODE=0` | spento (il PA salvato viene comunque applicato, vedi `LIDAR_PA_APPLY`) |
 | `LIDAR_FIRSTLAYER ON=1 ON_BAD=pause` | controlla anche il primo strato (`ON_BAD=cancel` annulla una stampa difettosa) |
 | `LIDAR_PA_APPLY ON=0` | non applicare i PA salvati (usa `printer.cfg` / il gcode) |
+| `LIDAR_ASK_ON` | **chiede ogni volta**: vedi sotto |
 
-La scelta resta (anche dopo un riavvio); `LIDAR_STATUS` mostra cosa è attivo. Poi avvia
+La scelta resta (anche dopo un riavvio); `LIDAR_STATUS` mostra cosa è attivo.
+
+**Decidere stampa per stampa.** Con `LIDAR_ASK_ON` (oppure `LIDAR_ASK ON=1 TIMEOUT=60`)
+a ogni avvio stampa Fluidd/Mainsail apre una finestra con il nome del file e i pulsanti
+**Taratura PA + primo strato**, **Solo taratura PA**, **Solo controllo primo strato**,
+**Stampa senza LiDAR** e **Non stampare**. Se nessuno risponde entro il tempo limite
+(predefinito 60 s, da 10 a 600) la stampa parte con le impostazioni salvate qui sopra:
+per esempio se avvii dal display e Fluidd non è aperto. Anche chiudere la finestra con
+la X equivale a non rispondere. "Taratura PA" usa la modalità di `LIDAR_FLOW` (1 se è
+spenta). `LIDAR_CANCEL` mentre la finestra è aperta = non stampare. `LIDAR_ASK_OFF`
+toglie la domanda. Serve Fluidd 1.30+ o Mainsail 2.9+. Poi avvia
 le stampe come sempre — da Fluidd, Mainsail o dal display. Cosa succede:
 
 1. Nome del profilo, materiale e temperature si leggono dal gcode (altrimenti da
@@ -202,6 +213,7 @@ Tieni libero il bordo sinistro del piatto quando può partire una taratura.
 | `LIDAR_FLOW MODE=0/1/2` (`LIDAR_FLOW_ON` / `_OFF`) | taratura prima della stampa |
 | `LIDAR_FIRSTLAYER ON=0/1 ON_BAD=pause/cancel` (`_ON` / `_OFF`) | controllo primo strato |
 | `LIDAR_PA_APPLY ON=0/1` | applica il PA salvato all'avvio stampa |
+| `LIDAR_ASK ON=0/1 TIMEOUT=60` (`LIDAR_ASK_ON` / `_OFF`) | chiede prima di ogni stampa (finestra in Fluidd/Mainsail) |
 | `LIDAR_SET_MATERIAL MATERIAL= HOTEND= BED=` | ripiego se il gcode non lo dice |
 | `LIDAR_CANCEL` | ferma il job in corso; laser e riscaldatori spenti |
 | `LIDAR_LANGUAGE LANG=it/en` | lingua dei messaggi |

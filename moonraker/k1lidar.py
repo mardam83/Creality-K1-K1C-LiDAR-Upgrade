@@ -13,10 +13,16 @@
 #   k1lidar_pa(nozzle, bed, filament, material, fine, start, step, gcode)   taratura PA a pulsante
 #   k1lidar_set(pa, gcode, filament, nozzle)    PA di un profilo impostato a mano
 #   k1lidar_cancel()  k1lidar_list()  k1lidar_forget(filament, nozzle)
+#   k1lidar_answer(choice)                      risposta alla domanda di avvio stampa
+#
+# Domanda prima della stampa (registro lidar_ask=1): k1lidar_print apre una finestra in
+# Fluidd/Mainsail (righe "// action:prompt_..." in console, via _LIDAR_SAY) e aspetta
+# la risposta per lidar_ask_timeout secondi; senza risposta usa i registri salvati.
 # HTTP (gli stessi nomi valgono come JSON-RPC sul websocket):
 #   GET  /machine/k1lidar/status      registri, job in corso, ultimi risultati, log
 #   GET  /machine/k1lidar/filaments   calibrazioni salvate per filamento
-#   POST /machine/k1lidar/settings    {flow, firstlayer, on_bad, pa_apply, lang, material, hotend, bed}
+#   POST /machine/k1lidar/settings    {flow, firstlayer, on_bad, pa_apply, ask, ask_timeout,
+#                                      lang, material, hotend, bed}
 #   POST /machine/k1lidar/pa          {nozzle, bed, filament, material, fine, start, step, gcode}
 #   POST /machine/k1lidar/set         {pa, gcode | filament + nozzle}
 #   POST /machine/k1lidar/print       {filename}  (applica i registri)
@@ -41,8 +47,10 @@ MIN_HOTEND, MAX_HOTEND = 150, 320
 MIN_BED, MAX_BED = 40, 115
 CALIB = "/usr/data/lidar_calib.json"
 GCODES = "/usr/data/printer_data/gcodes"
+# risposte della finestra di avvio stampa
+ASK_CHOICES = ("both", "pa", "fl", "none", "cancel", "default")
 DEFAULTS = {"lidar_flow": 0, "lidar_firstlayer": 0, "lidar_on_bad": "pause",
-            "lidar_pa_apply": 1, "lidar_lang": "en",
+            "lidar_pa_apply": 1, "lidar_lang": "en", "lidar_ask": 0, "lidar_ask_timeout": 60,
             "lidar_material": "PLA", "lidar_hotend": 0, "lidar_bed": 0}
 
 
@@ -56,6 +64,7 @@ class K1Lidar:
         self.task: Optional[str] = None
         self.last: Dict[str, Any] = {}
         self.log_lines: list = []
+        self.ask_future: Optional[asyncio.Future] = None
 
         for path, methods, cb in (
                 ("/machine/k1lidar/status", ["GET"], self._h_status),
@@ -69,7 +78,7 @@ class K1Lidar:
         for name, cb in (("k1lidar_print", self._rm_print), ("k1lidar_pa", self._rm_pa),
                          ("k1lidar_set", self._rm_set),
                          ("k1lidar_cancel", self._rm_cancel), ("k1lidar_list", self._rm_list),
-                         ("k1lidar_forget", self._rm_forget)):
+                         ("k1lidar_forget", self._rm_forget), ("k1lidar_answer", self._rm_answer)):
             self.server.register_remote_method(name, cb)
 
     # ------------------------------------------------------------- registri
@@ -299,13 +308,89 @@ class K1Lidar:
         rc = await self._run_aux(args, regs["lidar_lang"])
         return {"ok": rc == 0, "args": args}
 
+    # ------------------------------------------------- domanda prima della stampa
+    @staticmethod
+    def _describe(flow: int, fl: int, it: bool) -> str:
+        parts = []
+        if flow:
+            parts.append("taratura PA" if it else "PA calibration")
+        if fl:
+            parts.append("controllo primo strato" if it else "first layer check")
+        return " + ".join(parts) or ("nessuna funzione LiDAR" if it else "no LiDAR feature")
+
+    async def _prompt(self, line: str) -> None:
+        # klipper tronca la riga a # ; * : fuori dal testo della finestra
+        line = re.sub(r"[#;*]", "_", line).replace('"', "'")[:200]
+        await self._kapis().run_gcode('_LIDAR_SAY MSG="%s"' % line)
+
+    async def _ask(self, filename: str, regs: Dict[str, Any]) -> str:
+        # Finestra in Fluidd/Mainsail; ritorna una di ASK_CHOICES ("default" = nessuna
+        # risposta entro il tempo limite).
+        it = str(regs["lidar_lang"]) == "it"
+
+        def T(i, e):
+            return i if it else e
+        try:
+            timeout = max(10, min(600, int(regs.get("lidar_ask_timeout") or 60)))
+        except (TypeError, ValueError):
+            timeout = 60
+        saved = self._describe(int(regs["lidar_flow"]), int(regs["lidar_firstlayer"]), it)
+        fut = asyncio.get_event_loop().create_future()
+        self.ask_future = fut
+
+        def btn(label, choice, color, kind="prompt_button"):
+            return "action:%s %s|_LIDAR_ASK_ANSWER CHOICE=%s|%s" % (kind, label, choice, color)
+        lines = [
+            "action:prompt_end",
+            "action:prompt_begin " + T("LiDAR - prima di stampare", "LiDAR - before printing"),
+            "action:prompt_text " + os.path.basename(filename),
+            "action:prompt_text " + T("Senza risposta entro %d s: %s (impostazioni salvate)",
+                                      "No answer within %d s: %s (saved settings)") % (timeout, saved),
+            btn(T("Taratura PA + primo strato", "PA calibration + first layer"), "both", "primary"),
+            btn(T("Solo taratura PA", "PA calibration only"), "pa", "secondary"),
+            btn(T("Solo controllo primo strato", "First layer check only"), "fl", "secondary"),
+            btn(T("Stampa senza LiDAR", "Print without LiDAR"), "none", "secondary"),
+            btn(T("Non stampare", "Do not print"), "cancel", "error", "prompt_footer_button"),
+            "action:prompt_show"]
+        try:
+            for line in lines:
+                await self._prompt(line)
+            try:
+                choice = await asyncio.wait_for(asyncio.shield(fut), timeout)
+            except asyncio.TimeoutError:
+                choice = "default"
+                await self._prompt("action:prompt_end")
+                await self._say(T("LiDAR: nessuna risposta, uso le impostazioni salvate",
+                                  "LiDAR: no answer, using the saved settings"))
+        finally:
+            self.ask_future = None
+        return choice
+
     async def start_print(self, filename: str):
         if not filename:
             raise self.server.error("filename mancante", 400)
+        if self._busy() or self.ask_future is not None:
+            raise self.server.error("LiDAR: job o domanda gia' in corso (%s)"
+                                    % (self.task if self._busy() else "domanda"), 409)
         regs = await self._regs()
+        flow, fl = int(regs["lidar_flow"]), int(regs["lidar_firstlayer"])
+        if int(regs.get("lidar_ask") or 0):
+            it = str(regs["lidar_lang"]) == "it"
+            choice = await self._ask(filename, regs)
+            if choice == "cancel":
+                await self._say("LiDAR: stampa non avviata" if it else "LiDAR: print not started")
+                return {"started": False, "choice": choice}
+            if await self._print_state() in ("printing", "paused"):
+                await self._say("LiDAR: c'e' gia' una stampa in corso" if it
+                                else "LiDAR: a print is already running")
+                return {"started": False, "choice": choice}
+            if choice != "default":
+                flow = (flow if flow in (1, 2) else 1) if choice in ("both", "pa") else 0
+                fl = 1 if choice in ("both", "fl") else 0
+            await self._say("LiDAR: %s" % self._describe(flow, fl, it))
         args = ["print", filename,
-                "--flow", str(int(regs["lidar_flow"])),
-                "--firstlayer", str(int(regs["lidar_firstlayer"])),
+                "--flow", str(flow),
+                "--firstlayer", str(fl),
                 "--on-bad", "cancel" if regs["lidar_on_bad"] == "cancel" else "pause",
                 "--pa-apply", str(int(regs["lidar_pa_apply"])),
                 "--material", str(regs["lidar_material"]).upper()]
@@ -318,6 +403,10 @@ class K1Lidar:
         return {"started": True, "task": "print", "args": args}
 
     async def cancel(self):
+        if self.ask_future is not None and not self.ask_future.done():
+            self.ask_future.set_result("cancel")
+            await self._prompt("action:prompt_end")
+            return {"cancelled": True, "task": "ask"}
         if not self._busy():
             return {"cancelled": False}
         assert self.proc is not None
@@ -356,6 +445,11 @@ class K1Lidar:
 
     async def _rm_set(self, pa=None, gcode=None, filament=None, nozzle=None, **_kw) -> None:
         await self._guard(self.set_pa(pa, gcode, filament, nozzle))
+
+    async def _rm_answer(self, choice: str = "default", **_kw) -> None:
+        c = str(choice or "default").lower()
+        if self.ask_future is not None and not self.ask_future.done():
+            self.ask_future.set_result(c if c in ASK_CHOICES else "default")
 
     async def _rm_cancel(self, **_kw) -> None:
         r = await self.cancel()
@@ -410,6 +504,13 @@ class K1Lidar:
             pending.append(("lidar_firstlayer", 1 if req.get_boolean("firstlayer") else 0))
         if "pa_apply" in args:
             pending.append(("lidar_pa_apply", 1 if req.get_boolean("pa_apply") else 0))
+        if "ask" in args:
+            pending.append(("lidar_ask", 1 if req.get_boolean("ask") else 0))
+        if "ask_timeout" in args:
+            v = req.get_int("ask_timeout")
+            if not 10 <= v <= 600:
+                raise self.server.error("ask_timeout: 10-600 s", 400)
+            pending.append(("lidar_ask_timeout", v))
         if "on_bad" in args:
             v = req.get_str("on_bad")
             if v not in ("pause", "cancel"):

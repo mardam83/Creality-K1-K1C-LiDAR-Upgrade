@@ -74,6 +74,7 @@ Result in the console, e.g.
 |---|---|
 | `LIDAR_FLOW MODE=1` | profiles never measured are calibrated before the print; the others get their saved PA |
 | `LIDAR_FIRSTLAYER ON=1 ON_BAD=pause` | also scan the first layer |
+| `LIDAR_ASK_ON` | or decide at every print: Fluidd/Mainsail asks (PA / first layer / both / none), saved settings after 60 s without an answer |
 | `LIDAR_STATUS` · `LIDAR_CANCEL` | what is on · stop a job |
 
 Then print as usual (Fluidd, Mainsail or the display).
