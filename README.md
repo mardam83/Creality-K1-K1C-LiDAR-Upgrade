@@ -12,7 +12,7 @@ Mainsail:
   calibrated first. Optionally the **first layer is scanned** and the print pauses (or
   is cancelled) if it is bad, with the position of the defect in mm.
 
-📖 **Manual**: [English](docs/MANUAL.md) · [Italiano](docs/GUIDA_IT.md)
+📖 **Manual**: [English](docs/MANUAL.md) · [Italiano](docs/GUIDA_IT.md) · [Detailed explanation & diagrams (IT)](docs/SPIEGAZIONE_SEMPLICE.md)
 
 ## Requirements
 - Creality **K1** (CR-K1) **with the LiDAR module**. K1 Max / K1C: not supported.
@@ -89,6 +89,33 @@ spool gave 0.0274 and 0.0270. Details in the [manual](docs/MANUAL.md#how-the-pa-
 
 Creality's own PA analysis is not used (on the same filament it returned 0.054 or
 0.0375 depending on where the value fell in the pattern).
+
+## Improvements over the stock Creality system
+
+Real-world testing on the K1 (firmware 1.3.5.22) identified several structural flaws in Creality's factory implementation that this project redesigns from scratch:
+
+### 1. Pressure Advance (PA) calibration
+* **True physical repeatability**:
+  * *Stock Creality*: Two clean runs with the same PLA spool 20 minutes apart yielded **0.054** and **0.0375**; the algorithm favored rows based on position in the pattern rather than corner geometry.
+  * *K1 LiDAR*: Analyzes physical corner volume fill ($\pm 1.5$ mm) across all laser profiles. Repeatability tests on the same spool consistently gave **0.0274** and **0.0270** with an 80% bootstrap confidence interval.
+* **Laser frame synchronization**:
+  * *Stock Creality*: Inferred frame positions from frame count (~11 fps). Because Klipper delays motion execution responses, frames were registered late, capturing the head stationary at the end of travel with incorrect coordinates.
+  * *K1 LiDAR*: Uses a single continuous pass at controlled speed (`F400`), matching each frame timestamp directly against Klipper's planned motion queue (`dump_trapq`). Max position error is under 0.3 mm.
+* **Validation & safety**:
+  * Incomplete scans or corrupted rows are rejected with clear diagnostic messages instead of saving erroneous values. Travel moves use 5 mm Z-hops to avoid collisions with printed test lines.
+* **Per-filament profile storage**:
+  * Stores and recalls PA values per slicer filament profile and nozzle temperature (OrcaSlicer, PrusaSlicer, Bambu Studio, Creality Print), with customized search ranges for PLA/ABS/ASA, PETG, and TPU.
+
+### 2. First layer inspection (C2 Analyzer)
+* **Precise defect localization**:
+  * *Stock Creality*: Returns an opaque binary verdict (pass/fail) without indicating where the defect is, and can be fooled by surface reflections.
+  * *K1 LiDAR (C2)*: Compares a 3D height map directly against the sliced G-code, reporting missing or lifted extrusion with exact $(X, Y)$ coordinates and defect area in mm².
+* **Elimination of phantom defects**:
+  * Compensates for bed thermal expansion (Z-offset shifts up to 0.1 mm between runs), measures and corrects ~3 mm laser lens distortion, and filters out optical reflections from glossy plates.
+* **Fix for the infinite pause loop**:
+  * Stock firmware frequently left the first-layer check flag set, pausing the printer at every subsequent layer. K1 LiDAR properly clears the layer state upon resumption.
+* **Interactive print-start prompt (`LIDAR_ASK`)**:
+  * An interactive Fluidd/Mainsail prompt (`action:prompt`) lets you choose whether to run PA calibration, inspect the first layer, do both, or skip before each print.
 
 ## Safety
 Keep the left edge of the plate clear when a calibration may run. Test pattern travel
